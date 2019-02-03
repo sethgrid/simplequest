@@ -1,6 +1,10 @@
 package parser
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/sethgrid/simplequest/utils"
+)
 
 type Parsed struct {
 	Sentence string
@@ -10,7 +14,7 @@ type Parsed struct {
 	Identifier string
 }
 
-var skipWords = []string{"an", "the", "a", "to", "around", "through", "over", "beside", "on"}
+var skipWords = []string{"an", "the", "up", "a", "to", "around", "through", "over", "beside", "on"}
 
 func Parse(sentence string) Parsed {
 	parsed := &Parsed{Sentence: sentence}
@@ -19,8 +23,12 @@ func Parse(sentence string) Parsed {
 	var gotSecondWord bool
 	for _, word := range words {
 		word = strings.ToLower(word)
-		if inList(word, skipWords) {
+		if utils.StrInList(word, skipWords) {
 			continue
+		}
+		if word == "and" {
+			utils.Debugf("compound commands not supported yet")
+			break
 		}
 		if !gotFirstWord {
 			parsed.Action = word
@@ -39,14 +47,30 @@ func Parse(sentence string) Parsed {
 		parsed.Object = word
 		break
 	}
+	parsed.Action = verbSynonym(parsed.Action)
 	return *parsed
 }
 
-func inList(needle string, haystack []string) bool {
-	for _, element := range haystack {
-		if needle == element {
-			return true
-		}
+var goVerbs = []string{"go", "run", "walk", "travel", "head", "venture", "approach"}
+var lookVerbs = []string{"look", "inspect", "read"}
+var takeVerbs = []string{"take", "steal", "get"}
+var useVerbs = []string{"use", "activate"}
+var exitVerbs = []string{"exit", "quit", "leave"}
+
+// verbSynonym hones down the verbs we have to explicitly handle
+func verbSynonym(someVerb string) string {
+	switch {
+	case utils.StrInList(someVerb, goVerbs):
+		return "go"
+	case utils.StrInList(someVerb, lookVerbs):
+		return "look"
+	case utils.StrInList(someVerb, takeVerbs):
+		return "take"
+	case utils.StrInList(someVerb, useVerbs):
+		return "use"
+	case utils.StrInList(someVerb, exitVerbs):
+		return "exit"
+	default:
+		return ""
 	}
-	return false
 }
