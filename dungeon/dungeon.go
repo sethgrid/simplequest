@@ -6,6 +6,13 @@ import (
 	"github.com/sethgrid/simplequest/utils"
 )
 
+var NotTakable = false
+var Takable = true
+var NoInventoryDesc = ""
+var NoAction = func(verb string, item ...*Item) string { return "" }
+var Locked = true
+var Open = true
+
 // Dungeon contains unexported properties to facilitate creating a dungeon.
 type Dungeon struct {
 	startingCell string           // cellID
@@ -32,6 +39,8 @@ type Cell struct {
 	description  string
 	destinations map[string]destination
 	dungeon      Dungeon
+	items        []*Item
+	doors        []*Door
 }
 
 type destination struct {
@@ -76,6 +85,28 @@ func (c *Cell) AddDestination(cellID, name, localDescription string) *Cell {
 		c.destinations[variation] = destination{cellID: cellID, description: localDescription, hiddenOption: hiddenOption}
 	}
 	return c
+}
+
+// AddItem to the cell
+func (c *Cell) AddItem(item *Item) *Cell {
+	c.items = append(c.items, item)
+	return c
+}
+
+// AddDoor to the cell
+func (c *Cell) AddDoor(door *Door) *Cell {
+	c.doors = append(c.doors, door)
+	return c
+}
+
+// GetDoor will look for a door of the given name in this cell and return it if it exists
+func (c *Cell) GetDoor(name string) (*Door, bool) {
+	for _, door := range c.doors {
+		if door.Name == name {
+			return door, true
+		}
+	}
+	return nil, false
 }
 
 // GetDestinationID ...

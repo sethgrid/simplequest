@@ -6,21 +6,29 @@ import (
 	"github.com/sethgrid/simplequest/utils"
 )
 
+// Parsed represents a command that has been filtered for use in the quest
 type Parsed struct {
-	Sentence string
-	Action   string
+	Sentence  string
+	RawAction string
+	Action    string
 
 	Object     string
 	Identifier string
+
+	ActionObject     string
+	ActionIdentifier string
 }
 
-var skipWords = []string{"an", "the", "up", "a", "to", "around", "through", "over", "beside", "on"}
+var skipWords = []string{"an", "the", "up", "a", "to", "around", "through", "over", "beside", "on", "in", "is", "my"}
 
+// Parse takes in a simple sentence and transforms it into a parsed structure that can be used to perform an action.
 func Parse(sentence string) Parsed {
 	parsed := &Parsed{Sentence: sentence}
 	words := strings.Split(sentence, " ")
 	var gotFirstWord bool
 	var gotSecondWord bool
+
+	//open the door with the key
 	for _, word := range words {
 		word = strings.ToLower(word)
 		if utils.StrInList(word, skipWords) {
@@ -30,8 +38,15 @@ func Parse(sentence string) Parsed {
 			utils.Debugf("compound commands not supported yet")
 			break
 		}
+		if word == "with" {
+			// set up parser to receive a new object
+			parsed.ActionObject = parsed.Object
+			parsed.ActionIdentifier = parsed.Identifier
+			gotSecondWord = false
+			continue
+		}
 		if !gotFirstWord {
-			parsed.Action = word
+			parsed.RawAction = word
 			gotFirstWord = true
 			continue
 		}
@@ -45,14 +60,23 @@ func Parse(sentence string) Parsed {
 		// move blue from object to identifer and put door as object
 		parsed.Identifier = parsed.Object
 		parsed.Object = word
-		break
+
+		// The last thing we can parse is the Action identifier. If we have that, stop scanning the sentence.
+		if parsed.ActionIdentifier != "" {
+			break
+		}
 	}
-	parsed.Action = verbSynonym(parsed.Action)
+	if parsed.ActionObject != "" {
+		// if we had a sentance with two objects, they probably want the second object to be the action object
+		parsed.Object, parsed.ActionObject = parsed.ActionObject, parsed.Object
+		parsed.Identifier, parsed.ActionIdentifier = parsed.ActionIdentifier, parsed.Identifier
+	}
+	parsed.Action = verbSynonym(parsed.RawAction)
 	return *parsed
 }
 
-var goVerbs = []string{"go", "run", "walk", "travel", "head", "venture", "approach"}
-var lookVerbs = []string{"look", "inspect", "read"}
+var goVerbs = []string{"go", "run", "walk", "travel", "head", "venture", "approach", "climb"}
+var lookVerbs = []string{"look", "inspect", "read", "what", "what's", "whats"}
 var takeVerbs = []string{"take", "steal", "get"}
 var useVerbs = []string{"use", "activate"}
 var exitVerbs = []string{"exit", "quit", "leave"}
@@ -71,6 +95,6 @@ func verbSynonym(someVerb string) string {
 	case utils.StrInList(someVerb, exitVerbs):
 		return "exit"
 	default:
-		return ""
+		return someVerb
 	}
 }
