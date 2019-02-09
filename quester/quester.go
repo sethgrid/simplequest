@@ -96,6 +96,8 @@ func (q *quest) Start() {
 			parsed := parser.Parse(string(line))
 			utils.Debugf("%#v", parsed)
 
+			describedObject := strings.TrimSpace(parsed.Identifier + " " + parsed.Object)
+
 			cell, ok := q.d.LoadCell(cmd.currentCellID)
 			if !ok {
 				utils.Debugf("landed in a bad cell!")
@@ -105,6 +107,16 @@ func (q *quest) Start() {
 
 			if parsed.Action == "look" && (parsed.Object == "" || parsed.Object == "around") {
 				cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
+				break
+			}
+
+			if parsed.Action == "look" && describedObject != "" {
+				item, ok := cell.GetItem(describedObject)
+				if !ok {
+					cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s\n> ", describedObject)}
+					break
+				}
+				cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("%s\n> ", item.InRoomDesc)}
 				break
 			}
 
@@ -124,7 +136,22 @@ func (q *quest) Start() {
 				break
 			}
 
-			describedObject := strings.TrimSpace(parsed.Identifier + " " + parsed.Object)
+			if parsed.Action == "take" {
+				item, ok := cell.GetItem(describedObject)
+				if !ok {
+					cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s to take", describedObject) + "\n> "}
+					break
+				}
+				if !item.Takable {
+					cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you cannot take the %s", describedObject) + "\n> "}
+					break
+				}
+				item.InInventory = true
+				cell.RemoveItem(item.Name)
+				q.p.AddInventory(item)
+				cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you've taken the %s", describedObject) + "\n> "}
+				break
+			}
 
 			if parsed.Action == "go" {
 				nextCellID, ok := cell.GetDestinationID(parsed.Object)
@@ -159,6 +186,24 @@ func (q *quest) Start() {
 			// do door action?
 			if cellDoor, ok := cell.GetDoor(describedObject); ok {
 				cmds <- stateCommand{currentCellID: cell.ID, prompt: cellDoor.PerformActionAndPrompt(cell, parsed, q.p.inventory...) + "\n> "}
+				break
+			}
+
+			// attempt the action on all items in the room
+			var itemResponse string
+			for _, item := range cell.Items() {
+				utils.Debugf("inspecting " + item.Name)
+				itemResponse = item.Action(cell, parsed, q.p.inventory...)
+				if itemResponse == "nothing happens" || itemResponse == "" {
+					utils.Debugf("item does nothing")
+					continue
+				}
+				utils.Debugf("got item response")
+				break
+			}
+
+			if itemResponse != "" {
+				cmds <- stateCommand{currentCellID: cell.ID, prompt: itemResponse + "\n> "}
 				break
 			}
 

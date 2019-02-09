@@ -77,8 +77,9 @@ func Parse(sentence string) Parsed {
 
 var goVerbs = []string{"go", "run", "walk", "travel", "head", "venture", "approach", "climb"}
 var lookVerbs = []string{"look", "inspect", "read", "what", "what's", "whats"}
-var takeVerbs = []string{"take", "steal", "get"}
+var takeVerbs = []string{"take", "steal", "get", "grab", "remove"}
 var useVerbs = []string{"use", "activate"}
+var sayVerbs = []string{"say", "speak", "tell", "yell", "whisper", "shout"}
 var exitVerbs = []string{"exit", "quit", "leave"}
 
 // verbSynonym hones down the verbs we have to explicitly handle
@@ -94,6 +95,8 @@ func verbSynonym(someVerb string) string {
 		return "use"
 	case utils.StrInList(someVerb, exitVerbs):
 		return "exit"
+	case utils.StrInList(someVerb, sayVerbs):
+		return "say"
 	default:
 		return someVerb
 	}

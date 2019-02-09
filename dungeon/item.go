@@ -10,6 +10,7 @@ type Item struct {
 	Takable     bool
 	InInventory bool
 	Movable     bool
+	Hidden      bool
 	InRoomDesc  string
 	InInvDesc   string
 	// Action takes in an verb and an optional list of items.
@@ -17,11 +18,11 @@ type Item struct {
 	// If two, it is expected to be item 1 as the initiating item and
 	// item 2 as the receiving item.
 	// Eg "smash", "table", "rock"
-	Action func(command parser.Parsed, inventory ...[]*Item) string
+	Action func(cell *Cell, command parser.Parsed, inventory ...*Item) string
 }
 
 // NewItem is a helper to initialize an Item
-func NewItem(name string, takable bool, movable bool, inRoomDesc string, inInvDesc string, action func(command parser.Parsed, inventory ...[]*Item) string) *Item {
+func NewItem(name string, takable bool, movable bool, inRoomDesc string, inInvDesc string, action func(cell *Cell, command parser.Parsed, inventory ...*Item) string) *Item {
 	return &Item{
 		Name:       name,
 		Takable:    takable,

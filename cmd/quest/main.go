@@ -49,8 +49,8 @@ func main() {
 		Description("you enter the geat entry way. Soon, there will be three doors.").
 		AddDestination("castle 0,1", "rusty door", "the rusty door is behind you").
 		AddDestination("castle 2,0", "blue door", "a blue door").
-		AddDestination("castle 2,0", "red door", "a red door with a blue lock on it").
-		AddDestination("castle 2,0", "green door", "a green door with a white lock on it").
+		AddDestination("castle 2,1", "red door", "a red door with a blue lock on it").
+		AddDestination("castle 2,2", "green door", "a green door with a white lock on it").
 		AddDoor(rustyDoor).
 		AddDoor(redDoor).
 		AddDoor(blueDoor).
@@ -60,11 +60,12 @@ func main() {
 	d.NewCell("castle 2,0").
 		Description("in the center of room is a large stone table").
 		AddDestination("castle 1,1", "door|blue door", "the door out is on the eastern wall").
-		AddDoor(redDoor)
+		AddDoor(redDoor).
+		AddItem(stoneTable)
 
 	// red door
 	d.NewCell("castle 2,1").
-		Description("There is a white door. It is sealed shut with no apparent lock, inscribed on its doors is bit.ly/sddffs").
+		Description("There is a white door. It is sealed shut with no apparent lock, inscribed on its doors is https://bit.ly/IqT6zt").
 		AddDestination("castle 1,1", "door|red door", "the door out is on the eastern wall").
 		AddDoor(redDoor)
 
@@ -93,6 +94,60 @@ func main() {
 	quest.Start()
 }
 
+var stoneTable = &dungeon.Item{
+	Name:       "stone table",
+	Takable:    false,
+	Movable:    false,
+	InRoomDesc: "a large stone table. An incription reads 'tell me first your email, then a secret'",
+	Action: func(cell *dungeon.Cell, command parser.Parsed, inventory ...*dungeon.Item) string {
+		utils.Debugf("inside the stone table action router")
+		var email string
+		if strings.Contains(command.RawAction, "@") {
+			email = command.RawAction
+		} else if strings.Contains(command.Object, "@") {
+			email = command.Object
+		}
+		if email != "" {
+			return "the room rumbles for a moment, dust falls from the ceiling. You hear a distant whiper ... 'email sent...'"
+		}
+
+		if command.Action == "say" && command.Object == "mellon" {
+			cell.AddItem(blueKey)
+			item, ok := cell.GetItem("stone table")
+			if !ok {
+				return "something unexpected happened to the stone table. A blue key appeared upon it"
+			}
+			item.InRoomDesc = "a large stone table lay split in half"
+			return "the room violently rumbles and begins to quake. The large stone table strains with the shifting ground and breaks in half. Floating in the air, you see a blue key."
+		}
+
+		if command.Object != "table" {
+			return "nothing happens"
+		}
+
+		if command.Action == "move" {
+			return "you are unable to budge the large stone table"
+		}
+
+		return "nothing happens"
+	},
+}
+
+var blueKey = &dungeon.Item{
+	Name:       "blue key",
+	Takable:    true,
+	InRoomDesc: "a blue key floats in midair",
+	InInvDesc:  "an ordinary key of the blue persuation - aside from the fact it was found floating in the air.",
+	Action: func(cell *dungeon.Cell, command parser.Parsed, inventory ...*dungeon.Item) string {
+		switch command.Action {
+		case "use":
+			return "Use it how? Try: unlock the <thing> with the blue key"
+		default:
+			return "nothing happens"
+		}
+	},
+}
+
 var rustyDoor = dungeon.NewDoor(
 	"rusty door", !dungeon.Locked, dungeon.Open, "the door is very tall, at least 15 ft. The henges are rusted in place, keeping the doors ajar.",
 	func(cell *dungeon.Cell, command parser.Parsed, inventory ...*dungeon.Item) string {
@@ -106,7 +161,7 @@ var rustyDoor = dungeon.NewDoor(
 
 // TODO: default lock/unlock and close/open handling with custom descriptions and requried unlocking item
 var blueDoor = dungeon.NewDoor(
-	"blue door", dungeon.Locked, !dungeon.Open, "the blue door is firmly shut.",
+	"blue door", !dungeon.Locked, !dungeon.Open, "the blue door is firmly shut.",
 	func(cell *dungeon.Cell, command parser.Parsed, inventory ...*dungeon.Item) string {
 		doorName := strings.TrimSpace(command.Identifier + " " + command.Object)
 

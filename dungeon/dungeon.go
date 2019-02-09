@@ -109,12 +109,42 @@ func (c *Cell) GetDoor(name string) (*Door, bool) {
 	return nil, false
 }
 
+// GetItem will look for an item of the given name in this cell and return it if it exists
+func (c *Cell) GetItem(name string) (*Item, bool) {
+	for _, item := range c.items {
+		if item.Name == name {
+			return item, true
+		}
+	}
+	return nil, false
+}
+
+// RemoveItem disassociates the item with the cell
+func (c *Cell) RemoveItem(name string) {
+	itemIndex := -1
+	for i, item := range c.items {
+		if item.Name == name {
+			itemIndex = i
+			break
+		}
+	}
+	if itemIndex >= 0 {
+		// remove the item from the room's item list
+		c.items = append(c.items[:itemIndex], c.items[itemIndex+1:]...)
+	}
+}
+
 // GetDestinationID ...
 func (c *Cell) GetDestinationID(name string) (string, bool) {
 	if destination, ok := c.destinations[name]; ok {
 		return destination.cellID, true
 	}
 	return "", false
+}
+
+// Items retreives all items from the cell
+func (c *Cell) Items() []*Item {
+	return c.items
 }
 
 // Prompt combines the description with destinations for this cell (and eventually items and monsters) and prepars the output the user will see.
@@ -127,6 +157,12 @@ func (c *Cell) Prompt(promptChar string) string {
 			continue
 		}
 		prompt += destination.description + "\n"
+	}
+
+	for _, item := range c.items {
+		if !item.Hidden {
+			prompt += item.InRoomDesc + "\n"
+		}
 	}
 
 	if promptChar != "" {
