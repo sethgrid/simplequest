@@ -1,11 +1,9 @@
 package quester
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"os"
 	"strings"
+	"time"
 
 	"github.com/sethgrid/simplequest/dungeon"
 	"github.com/sethgrid/simplequest/parser"
@@ -41,29 +39,23 @@ func (p *Player) DescribeInventory() string {
 	return description
 }
 
-type quest struct {
+type Quest struct {
 	d      *dungeon.Dungeon
 	p      *Player
 	cellID string
 
-	// allow for us to play over stdout/stdin by default
-	// but allow for us to easily change this to work over
-	// other protocols, like http, email, or sms
-	w io.Writer
-	r io.Reader
+	lastCommand time.Time
+
+	in   chan string
+	out  chan string
+	cmds chan stateCommand
+
+	isStopped bool
 }
 
 // NewQuest ....
-func NewQuest(p *Player, d *dungeon.Dungeon) *quest {
-	return &quest{p: p, d: d, cellID: "", w: os.Stdout, r: os.Stdin}
-}
-
-func (q *quest) Writer(w io.Writer) {
-	q.w = w
-}
-
-func (q *quest) Reader(r io.Reader) {
-	q.r = r
+func NewQuest(p *Player, d *dungeon.Dungeon) *Quest {
+	return &Quest{p: p, d: d, cellID: "", in: make(chan string), out: make(chan string)}
 }
 
 type stateCommand struct {
@@ -71,29 +63,43 @@ type stateCommand struct {
 	prompt        string
 }
 
-func (q *quest) Start() {
-	cmds := make(chan stateCommand, 1)
-	go func() {
-		// first load, will default to starting cell
-		cell, _ := q.d.LoadCell("")
-		cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
-	}()
-	var exitApp bool
+func (q *Quest) TakeCommand(s string) string {
+	go func() { q.in <- s }()
+	return <-q.out
+}
 
-	for !exitApp {
+var initilizer = "49hhkjndsf94"
+
+func (q *Quest) IsExpired() bool {
+	return q.lastCommand.Add(2 * time.Hour).After(time.Now())
+}
+
+func (q *Quest) Stop() {
+	q.isStopped = true
+	close(q.cmds)
+}
+
+func (q *Quest) Start() {
+	q.cmds = make(chan stateCommand, 1)
+	go func() {
+		// on the first game load over http/sms, we get our first input and must discard it
+		// because they have not gotten the first game prompt
+		cell, _ := q.d.LoadCell("")
+		<-q.in
+		q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
+	}()
+
+	for !q.isStopped {
 		select {
-		case cmd := <-cmds:
+		case cmd := <-q.cmds:
 			utils.Debugf("got a command for cell " + cmd.currentCellID)
-			q.w.Write([]byte(cmd.prompt))
-			reader := bufio.NewReader(q.r)
-			line, _, err := reader.ReadLine()
-			if err != nil {
-				utils.Debugf("error reading input - %v", err)
-				cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "there was an error: " + err.Error()}
-				break
-			}
-			utils.Debugf("received input: " + string(line))
-			parsed := parser.Parse(string(line))
+			q.out <- cmd.prompt
+			line := <-q.in
+
+			q.lastCommand = time.Now()
+
+			utils.Debugf("received input: " + line)
+			parsed := parser.Parse(line)
 			utils.Debugf("%#v", parsed)
 
 			describedObject := strings.TrimSpace(parsed.Identifier + " " + parsed.Object)
@@ -101,55 +107,55 @@ func (q *quest) Start() {
 			cell, ok := q.d.LoadCell(cmd.currentCellID)
 			if !ok {
 				utils.Debugf("landed in a bad cell!")
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: "you feel a strange sensation, you are suddenly not where you were\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "you feel a strange sensation, you are suddenly not where you were\n> "}
 				break
 			}
 
 			if parsed.Action == "look" && (parsed.Object == "" || parsed.Object == "around") {
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
 				break
 			}
 
 			if parsed.Action == "look" && describedObject != "" {
 				item, ok := cell.GetItem(describedObject)
 				if !ok {
-					cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s\n> ", describedObject)}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s\n> ", describedObject)}
 					break
 				}
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("%s\n> ", item.InRoomDesc)}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("%s\n> ", item.InRoomDesc)}
 				break
 			}
 
 			if parsed.Action == "inventory" || parsed.Action == "look" && parsed.Object == "inventory" {
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: q.p.DescribeInventory() + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: q.p.DescribeInventory() + "\n> "}
 				break
 			}
 
 			// TODO - this should not allow sms to cause the running app to exit
 			if parsed.Action == "exit" {
-				exitApp = true
+				q.Stop()
 				break
 			}
 
 			if parsed.Action == "help" {
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: helpDialog() + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: helpDialog() + "\n> "}
 				break
 			}
 
 			if parsed.Action == "take" {
 				item, ok := cell.GetItem(describedObject)
 				if !ok {
-					cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s to take", describedObject) + "\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s to take", describedObject) + "\n> "}
 					break
 				}
 				if !item.Takable {
-					cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you cannot take the %s", describedObject) + "\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you cannot take the %s", describedObject) + "\n> "}
 					break
 				}
 				item.InInventory = true
 				cell.RemoveItem(item.Name)
 				q.p.AddInventory(item)
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you've taken the %s", describedObject) + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you've taken the %s", describedObject) + "\n> "}
 				break
 			}
 
@@ -159,7 +165,7 @@ func (q *quest) Start() {
 					// maybe "go through the door" did not work, but "go through the green door" will.
 					nextCellID, ok = cell.GetDestinationID(describedObject)
 					if !ok {
-						cmds <- stateCommand{currentCellID: cell.ID, prompt: "hm. That did not work.\n> "}
+						q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "hm. That did not work.\n> "}
 						break
 					}
 				}
@@ -169,23 +175,23 @@ func (q *quest) Start() {
 				if !ok || cellDoor.IsOpen {
 					// do door blocking
 					cell, _ := q.d.LoadCell(nextCellID)
-					cmds <- stateCommand{currentCellID: nextCellID, prompt: cell.Prompt("> ")}
+					q.cmds <- stateCommand{currentCellID: nextCellID, prompt: cell.Prompt("> ")}
 					break
 				}
 				// door blocks the way
 				if cellDoor.IsLocked {
-					cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is locked.\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is locked.\n> "}
 					break
 				}
 				if !cellDoor.IsOpen {
-					cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is not open.\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is not open.\n> "}
 					break
 				}
 			}
 
 			// do door action?
 			if cellDoor, ok := cell.GetDoor(describedObject); ok {
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: cellDoor.PerformActionAndPrompt(cell, parsed, q.p.inventory...) + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cellDoor.PerformActionAndPrompt(cell, parsed, q.p.inventory...) + "\n> "}
 				break
 			}
 
@@ -203,11 +209,11 @@ func (q *quest) Start() {
 			}
 
 			if itemResponse != "" {
-				cmds <- stateCommand{currentCellID: cell.ID, prompt: itemResponse + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: itemResponse + "\n> "}
 				break
 			}
 
-			cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "** you can't do that. You must be more specific. Type 'help' to get an idea of how to interact. **\nthis incident has been logged by the system administrator\n> "}
+			q.cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "** you can't do that. You must be more specific. Type 'help' to get an idea of how to interact. **\nthis incident has been logged by the system administrator\n> "}
 		}
 	}
 }
