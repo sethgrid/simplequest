@@ -17,16 +17,27 @@ package rickroll
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"strings"
 
+	sendgrid "github.com/sendgrid/sendgrid-go"
+	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"github.com/sethgrid/simplequest/dungeon"
 	"github.com/sethgrid/simplequest/parser"
 	"github.com/sethgrid/simplequest/quester"
 	"github.com/sethgrid/simplequest/utils"
 )
 
+var sgAPIKey string
+
 // NewRickRoll sets up the dungeon and loads it into a quest
 func NewRickRoll(p *quester.Player) *quester.Quest {
+	sgAPIKey, _ = os.LookupEnv("SENDGRID_API_KEY")
+	if sgAPIKey == "" {
+		log.Fatal("unable to load NewRickRoll quest withough SENDGRID_API_KEY environment variable set")
+	}
+
 	d := dungeon.MakeDungeon()
 	// opening clearing
 	d.NewCell("outworld 1,1").
@@ -117,7 +128,11 @@ var stoneTable = &dungeon.Item{
 			email = command.Object
 		}
 		if email != "" {
-			return "the room rumbles for a moment, dust falls from the ceiling. You hear a distant whiper ... 'email sent...'"
+			ok := sendMail(email)
+			if ok {
+				return "the room rumbles for a moment, dust falls from the ceiling. You hear a distant whiper: 'email sent...'"
+			}
+			return "the begins to rumble, but quickly goes still. You hear distant whisper: 'unable to send email...'"
 		}
 
 		if command.Action == "say" && command.Object == "mellon" {
@@ -312,3 +327,24 @@ var redDoor = dungeon.NewDoor(
 		return "nothing happens"
 	},
 )
+
+func sendMail(emailAddr string) bool {
+	from := mail.NewEmail("Text Quest", "textquest@sethammons.com")
+	subject := "Message from the stone table"
+	to := mail.NewEmail("Text Quest Player", emailAddr)
+	plainTextContent := `You've engaged with the stone table in the realm of SMS.
+No longer are you confined to the world of text as your world has expanded to email.
+Look to the email headers friend, and say the discovered password in the room of the stone table to receive your reward.
+`
+	htmlContent := strings.Replace(plainTextContent, ".", ".</br>", -1)
+	message := mail.NewSingleEmail(from, subject, to, plainTextContent, htmlContent)
+	message.Headers = make(map[string]string)
+	message.Headers["x-textquest-stone-table-password"] = "mellon"
+	client := sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY"))
+	_, err := client.Send(message)
+	if err != nil {
+		log.Println(err)
+		return false
+	}
+	return true
+}
