@@ -26,6 +26,7 @@ func Parse(sentence string) Parsed {
 	parsed := &Parsed{Sentence: sentence}
 
 	// strip some common punctuation
+	sentence = strings.TrimSpace(sentence)
 	sentence = strings.Replace(sentence, ".", "", -1)
 	sentence = strings.Replace(sentence, "?", "", -1)
 	sentence = strings.Replace(sentence, "!", "", -1)

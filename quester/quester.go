@@ -69,8 +69,6 @@ func (q *Quest) TakeCommand(s string) string {
 	return <-q.out
 }
 
-var initilizer = "49hhkjndsf94"
-
 func (q *Quest) IsExpired() bool {
 	return q.lastCommand.Add(2 * time.Hour).Before(time.Now())
 }
@@ -215,7 +213,7 @@ func (q *Quest) Start() {
 			}
 
 			log.Printf("unrecognized command:\n  player %#v\n  cell %#v\n  parsed  %#v", q.p, cell, parsed)
-			q.cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "Unrecognized command. This incident has been logged by the system administrator."}
+			q.cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "Unrecognized command. This incident has been logged by the system administrator.\n"}
 		}
 	}
 }
