@@ -35,12 +35,13 @@ func (d *Dungeon) LoadCell(cellID string) (*Cell, bool) {
 
 // Cell represents a given poition in a dungeon / map.
 type Cell struct {
-	ID           string
-	description  string
-	destinations map[string]destination
-	dungeon      Dungeon
-	items        []*Item
-	doors        []*Door
+	ID               string
+	description      string
+	destinations     map[string]destination
+	dungeon          Dungeon
+	items            []*Item
+	doors            map[string]*Door // door names -> door
+	doorDestinations map[*Door]string // door -> cell id
 }
 
 type destination struct {
@@ -60,7 +61,12 @@ func (d *Dungeon) NewCell(id string) *Cell {
 	if len(d.m) == 0 {
 		d.startingCell = id
 	}
-	cell := &Cell{ID: id, destinations: make(map[string]destination)}
+	cell := &Cell{
+		ID:               id,
+		destinations:     make(map[string]destination),
+		doors:            make(map[string]*Door),
+		doorDestinations: make(map[*Door]string),
+	}
 	d.m[id] = cell
 	return cell
 }
@@ -94,8 +100,17 @@ func (c *Cell) AddItem(item *Item) *Cell {
 }
 
 // AddDoor to the cell
-func (c *Cell) AddDoor(door *Door) *Cell {
-	c.doors = append(c.doors, door)
+func (c *Cell) AddDoor(cellID string, name string, door *Door) *Cell {
+	variations := strings.Split(name, "|")
+	for i, variation := range variations {
+		c.doors[variation] = door
+		if i > 0 {
+			c.doors[variation] = door
+		} else {
+			c.doors[variation] = door
+			c.doorDestinations[door] = cellID
+		}
+	}
 	return c
 }
 
@@ -136,8 +151,12 @@ func (c *Cell) RemoveItem(name string) {
 
 // GetDestinationID ...
 func (c *Cell) GetDestinationID(name string) (string, bool) {
+	utils.Debugf("looking for destination %q", name)
 	if destination, ok := c.destinations[name]; ok {
 		return destination.cellID, true
+	}
+	if door, ok := c.doors[name]; ok {
+		return c.doorDestinations[door], true
 	}
 	return "", false
 }
@@ -157,6 +176,10 @@ func (c *Cell) Prompt(promptChar string) string {
 			continue
 		}
 		prompt += destination.description + "\n"
+	}
+
+	for door := range c.doorDestinations {
+		prompt += door.Description + "\n"
 	}
 
 	for _, item := range c.items {

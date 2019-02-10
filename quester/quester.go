@@ -2,6 +2,7 @@ package quester
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -71,7 +72,7 @@ func (q *Quest) TakeCommand(s string) string {
 var initilizer = "49hhkjndsf94"
 
 func (q *Quest) IsExpired() bool {
-	return q.lastCommand.Add(2 * time.Minute).Before(time.Now())
+	return q.lastCommand.Add(2 * time.Hour).Before(time.Now())
 }
 
 func (q *Quest) Stop() {
@@ -87,76 +88,72 @@ func (q *Quest) Start() {
 		// because they have not gotten the first game prompt
 		cell, _ := q.d.LoadCell("")
 		<-q.in
-		q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
+		q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("")}
 	}()
 
 	for !q.isStopped {
 		select {
 		case cmd := <-q.cmds:
-			utils.Debugf("got a command for cell " + cmd.currentCellID)
+			q.lastCommand = time.Now()
 			q.out <- cmd.prompt
 			line := <-q.in
-
-			q.lastCommand = time.Now()
-
-			utils.Debugf("received input: " + line)
 			parsed := parser.Parse(line)
-			utils.Debugf("%#v", parsed)
-
-			describedObject := strings.TrimSpace(parsed.Identifier + " " + parsed.Object)
-
 			cell, ok := q.d.LoadCell(cmd.currentCellID)
 			if !ok {
-				utils.Debugf("landed in a bad cell!")
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "you feel a strange sensation, you are suddenly not where you were\n> "}
+				log.Printf("bad path exists: current cell %#v", cmd.currentCellID)
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "you feel a strange sensation, you are suddenly not where you were "}
 				break
 			}
 
+			describedObject := strings.TrimSpace(parsed.Identifier + " " + parsed.Object)
+			utils.Debugf("%q [%s] %#v - described object %q", q.p.id, cmd.currentCellID, parsed, describedObject)
+
 			if parsed.Action == "look" && (parsed.Object == "" || parsed.Object == "around") {
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("> ")}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cell.Prompt("")}
 				break
 			}
 
 			if parsed.Action == "look" && describedObject != "" {
 				item, ok := cell.GetItem(describedObject)
 				if !ok {
-					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s\n> ", describedObject)}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s ", describedObject)}
 					break
 				}
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("%s\n> ", item.InRoomDesc)}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("%s ", item.InRoomDesc)}
 				break
 			}
 
 			if parsed.Action == "inventory" || parsed.Action == "look" && parsed.Object == "inventory" {
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: q.p.DescribeInventory() + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: q.p.DescribeInventory()}
 				break
 			}
 
 			// TODO - this should not allow sms to cause the running app to exit
 			if parsed.Action == "exit" {
 				q.Stop()
+				q.out <- "you have existed text quest"
 				break
 			}
 
 			if parsed.Action == "help" {
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: helpDialog() + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: helpDialog()}
 				break
 			}
 
 			if parsed.Action == "take" {
 				item, ok := cell.GetItem(describedObject)
 				if !ok {
-					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s to take", describedObject) + "\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("there is no %s to take", describedObject)}
 					break
 				}
 				if !item.Takable {
-					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you cannot take the %s", describedObject) + "\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you cannot take the %s", describedObject)}
 					break
 				}
 				item.InInventory = true
 				cell.RemoveItem(item.Name)
 				q.p.AddInventory(item)
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you've taken the %s", describedObject) + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("you've taken the %s", describedObject)}
 				break
 			}
 
@@ -164,35 +161,38 @@ func (q *Quest) Start() {
 				nextCellID, ok := cell.GetDestinationID(parsed.Object)
 				if !ok {
 					// maybe "go through the door" did not work, but "go through the green door" will.
+					utils.Debugf("go action. Next cell id is %q (parsed object %q)", nextCellID, parsed.Object)
 					nextCellID, ok = cell.GetDestinationID(describedObject)
+					utils.Debugf("go action. Next cell id is %q (parsed descirbed object %q)", nextCellID, describedObject)
 					if !ok {
-						q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "hm. That did not work.\n> "}
+						utils.Debugf("go action wont work")
+						q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "hm. That did not work. "}
 						break
 					}
 				}
 				// check if the path is blocked by a door
-
+				utils.Debugf("check door actions for %q", describedObject)
 				cellDoor, ok := cell.GetDoor(describedObject)
 				if !ok || cellDoor.IsOpen {
 					// do door blocking
 					cell, _ := q.d.LoadCell(nextCellID)
-					q.cmds <- stateCommand{currentCellID: nextCellID, prompt: cell.Prompt("> ")}
+					q.cmds <- stateCommand{currentCellID: nextCellID, prompt: cell.Prompt("")}
 					break
 				}
 				// door blocks the way
 				if cellDoor.IsLocked {
-					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is locked.\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is locked. Perhaps it needs to be unlocked. "}
 					break
 				}
 				if !cellDoor.IsOpen {
-					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: "The door is not open.\n> "}
+					q.cmds <- stateCommand{currentCellID: cell.ID, prompt: fmt.Sprintf("The door is not open. Try 'open the %s ", cellDoor.Name)}
 					break
 				}
 			}
 
 			// do door action?
 			if cellDoor, ok := cell.GetDoor(describedObject); ok {
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cellDoor.PerformActionAndPrompt(cell, parsed, q.p.inventory...) + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: cellDoor.PerformActionAndPrompt(cell, parsed, q.p.inventory...)}
 				break
 			}
 
@@ -210,11 +210,12 @@ func (q *Quest) Start() {
 			}
 
 			if itemResponse != "" {
-				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: itemResponse + "\n> "}
+				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: itemResponse}
 				break
 			}
 
-			q.cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "** you can't do that. You must be more specific. Type 'help' to get an idea of how to interact. **\nthis incident has been logged by the system administrator\n> "}
+			log.Printf("unrecognized command:\n  player %#v\n  cell %#v\n  parsed  %#v", q.p, cell, parsed)
+			q.cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "Unrecognized command. This incident has been logged by the system administrator."}
 		}
 	}
 }

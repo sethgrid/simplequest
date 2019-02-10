@@ -38,6 +38,26 @@ func TestSimpleSentences(t *testing.T) {
 			},
 		},
 		{
+			in: "  open  the blue         door ",
+			parsed: Parsed{
+				Sentence:   "  open  the blue         door ",
+				Action:     "open",
+				RawAction:  "open",
+				Object:     "door",
+				Identifier: "blue",
+			},
+		},
+		{
+			in: "Open the blue door.",
+			parsed: Parsed{
+				Sentence:   "Open the blue door.",
+				Action:     "open",
+				RawAction:  "open",
+				Object:     "door",
+				Identifier: "blue",
+			},
+		},
+		{
 			in: "open",
 			parsed: Parsed{
 				Sentence:   "open",

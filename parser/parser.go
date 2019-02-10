@@ -24,12 +24,21 @@ var skipWords = []string{"an", "the", "up", "a", "to", "around", "through", "ove
 // Parse takes in a simple sentence and transforms it into a parsed structure that can be used to perform an action.
 func Parse(sentence string) Parsed {
 	parsed := &Parsed{Sentence: sentence}
+
+	// strip some common punctuation
+	sentence = strings.Replace(sentence, ".", "", -1)
+	sentence = strings.Replace(sentence, "?", "", -1)
+	sentence = strings.Replace(sentence, "!", "", -1)
+
 	words := strings.Split(sentence, " ")
 	var gotFirstWord bool
 	var gotSecondWord bool
 
 	//open the door with the key
 	for _, word := range words {
+		if word == "" {
+			continue
+		}
 		word = strings.ToLower(word)
 		if utils.StrInList(word, skipWords) {
 			continue
@@ -75,12 +84,12 @@ func Parse(sentence string) Parsed {
 	return *parsed
 }
 
-var goVerbs = []string{"go", "run", "walk", "travel", "head", "venture", "approach", "climb"}
+var goVerbs = []string{"go", "run", "walk", "travel", "head", "venture", "approach", "climb", "enter"}
 var lookVerbs = []string{"look", "inspect", "read", "what", "what's", "whats"}
 var takeVerbs = []string{"take", "steal", "get", "grab", "remove"}
 var useVerbs = []string{"use", "activate"}
 var sayVerbs = []string{"say", "speak", "tell", "yell", "whisper", "shout"}
-var exitVerbs = []string{"exit", "quit", "leave"}
+var exitVerbs = []string{"exit", "quit"}
 
 // verbSynonym hones down the verbs we have to explicitly handle
 func verbSynonym(someVerb string) string {

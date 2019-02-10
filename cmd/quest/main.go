@@ -1,17 +1,9 @@
 package main
 
 /*
-TODO: push open the door. push the door open. go through the <closed> door (give help, you need to open it first)
-look for types like geat hall.
-start with basic instructions
-kick down the door (strip down?)
-send an actual email
-integrate with twilio sms for convo
-change leave (don't exit the app)
+TODOs
 leave room or use door or take key (if there is only one of a thing, they want to use that one of a thing)
-room descriptions: dont act like you just go in there for look around
-door descriptions should say if they are open or closed
-lock description - large thunk -> you've unlocked the door
+make cmd line work again
 */
 
 import (

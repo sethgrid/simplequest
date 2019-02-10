@@ -30,7 +30,7 @@ func init() {
 	}
 
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			// if we wanted to the be real, we would not stop the world to poll
@@ -91,7 +91,13 @@ func smsHandler(w http.ResponseWriter, r *http.Request) {
 
 	utils.Debugf("issuing command...")
 	prompt := game.TakeCommand(sms.Body)
-	utils.Debugf("got prompt")
+
+	if prompt == "you have existed text quest" {
+		srv.mu.Lock()
+		delete(srv.games, sms.From)
+		srv.mu.Unlock()
+	}
+
 	w.Write([]byte(twilio.SimpleTwiML(prompt)))
 }
 
