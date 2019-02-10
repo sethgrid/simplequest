@@ -12,6 +12,7 @@ text quest responds to simple commands, usually in the form of `verb noun`, `ver
 Run the server by going to the `cmd/quest` directory and run `go run main.go`. You can optionally send it the `-debug` flag.
 
 Command line mode: `go run main.go`
+
 HTTP mode: `go run main.go --mode=http`
 
 HTTP mode allows the endpoints `/sms` and `/plain` to be exposed. Configure your twilio sms enabled number to have a webhook of the `/sms` path to have a interactive text adventure that costs money :)
