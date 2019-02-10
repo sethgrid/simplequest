@@ -133,7 +133,7 @@ func (q *Quest) Start() {
 				break
 			}
 
-			if parsed.Action == "help" {
+			if parsed.Action == "help" || parsed.Action == "manual" {
 				q.cmds <- stateCommand{currentCellID: cell.ID, prompt: helpDialog()}
 				break
 			}
@@ -212,7 +212,7 @@ func (q *Quest) Start() {
 				break
 			}
 
-			log.Printf("unrecognized command:\n  player %#v\n  cell %#v\n  parsed  %#v", q.p, cell, parsed)
+			utils.Debugf("unrecognized command:\n  player %#v\n  cell %#v\n  parsed  %#v", q.p, cell, parsed)
 			q.cmds <- stateCommand{currentCellID: cmd.currentCellID, prompt: "Unrecognized command. This incident has been logged by the system administrator.\n"}
 		}
 	}

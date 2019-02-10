@@ -251,7 +251,7 @@ func NewRickRoll(p *quester.Player) *quester.Quest {
 	d := dungeon.MakeDungeon()
 	// opening clearing
 	d.NewCell("outworld 1,1").
-		Description("You find yourself in a clearing. You see a sign that reads: \"Welcome to Text Quest! Respond with simple commands and explore this text based world. Type 'help' if you need more help.\". Maybe you should 'go east'.").
+		Description("You find yourself in a clearing. You see a sign that reads: \"Welcome to Text Quest! Respond with simple commands and explore this text based world. Type 'manual' if you need more help.\". Maybe you should 'go east'. If you get lost, maybe 'look around'.").
 		AddDestination("outworld 1,0", "north", "To the north you see a vast, dark forest.").
 		AddDestination("outworld 2,1", "east", "To the east, you see the tops of large spires that just peak over the hills.")
 
@@ -288,7 +288,7 @@ func NewRickRoll(p *quester.Player) *quester.Quest {
 
 	// red door
 	d.NewCell("castle 2,1").
-		Description("There is a white door. It is sealed shut with no apparent lock, inscribed in its is https://bit.ly/IqT6zt").
+		Description("The room is a narrow hallway.").
 		AddDoor("castle 1,1", "door|red door", redDoor).
 		AddDoor("castle 3,2", "white door", whiteDoor)
 
