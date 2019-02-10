@@ -71,7 +71,7 @@ func (q *Quest) TakeCommand(s string) string {
 var initilizer = "49hhkjndsf94"
 
 func (q *Quest) IsExpired() bool {
-	return q.lastCommand.Add(2 * time.Hour).After(time.Now())
+	return q.lastCommand.Add(2 * time.Minute).Before(time.Now())
 }
 
 func (q *Quest) Stop() {
@@ -81,6 +81,7 @@ func (q *Quest) Stop() {
 
 func (q *Quest) Start() {
 	q.cmds = make(chan stateCommand, 1)
+
 	go func() {
 		// on the first game load over http/sms, we get our first input and must discard it
 		// because they have not gotten the first game prompt

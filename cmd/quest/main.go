@@ -12,7 +12,6 @@ leave room or use door or take key (if there is only one of a thing, they want t
 room descriptions: dont act like you just go in there for look around
 door descriptions should say if they are open or closed
 lock description - large thunk -> you've unlocked the door
-clean up old quests
 */
 
 import (
